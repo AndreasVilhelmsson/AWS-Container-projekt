@@ -1,0 +1,14 @@
+@use "./variables" as *;
+
+@mixin card {
+  background: $panel;
+  border-radius: $radius;
+  box-shadow: $shadow;
+}
+@mixin btn {
+  border: 0;
+  border-radius: 8px;
+  padding: 0.7rem 1rem;
+  font-weight: 600;
+  cursor: pointer;
+}
