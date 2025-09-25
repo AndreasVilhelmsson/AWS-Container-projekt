@@ -36,7 +36,7 @@ export default function App() {
 
   return (
     <div className="container">
-      <h1 className="header">Serverless Contact Form</h1>
+      <h1 className="header">Container based Contact Form</h1>
       <div className="panel">
         <MessageForm onSubmit={handleSubmit} disabled={loading} />
         {error && <p className="error">{error}</p>}
