@@ -39,23 +39,28 @@ U[User / Browser]
 
 %% Edge / DNS (optional custom domain)
 subgraph Edge
-CF[(Route53/Custom DNS)]
+  CF[(Route53/Custom DNS)]
 end
 
 %% ALB + SG
 subgraph VPC["VPC (default) 172.31.0.0/16"]
-direction TB
-subgraph PubA["Public Subnet A (AZ-1)"]
-ALB[(Application Load Balancer)]
-end
-subgraph PubB["Public Subnet B (AZ-2)"]
+  direction TB
+  subgraph PubA["Public Subnet A (AZ-1)"]
+    ALB[Application Load Balancer]
+  end
+  subgraph PubB["Public Subnet B (AZ-2)"]
+  end
 end
 
-    subgraph ECS["ECS Fargate Service: react-web-svc"]
-      direction LR
-      T1[(Task #1\nContainer: Nginx+React\nPort 80)]
-      T2[(Task #2\nContainer: Nginx+React\nPort 80)]
-    end
+%% ECS service
+subgraph ECS["ECS Fargate Service: react-web-svc"]
+  direction LR
+  T1[(Task #1 | Nginx+React | Port 80)]
+  T2[(Task #2 | Nginx+React | Port 80)]
+end
+
+%% Connections
+U --> CF --> ALB --> ECS
 
 end
 
