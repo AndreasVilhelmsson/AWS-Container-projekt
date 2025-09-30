@@ -54,6 +54,12 @@ Jag aktiverade "Show connections" och drog trafikflödet `User → ALB → ECS S
 
 ![ECR repositorium](Images/ecr2.jpg)
 
+![Frontend UI efter deploy](Images/frontendUI.jpg)
+<small>Skärmdump från ALB-DNS som bekräftar att React-gränssnittet laddar och kan lista/sända meddelanden mot backend.</small>
+
+![Serverless CloudFront-versionen](Images/frontend2.jpg)
+<small>CloudFront-distribuerade SPA:n från det tidigare serverless-projektet – kör mot samma API men hostas via S3/CloudFront.</small>
+
 ## Flödesdiagram
 
 ```mermaid
@@ -137,6 +143,18 @@ Scriptet fångar vanliga misstag (ingen Docker-daemon, avsaknad av Dockerfile) o
 - Autoskalningen verifierades genom att simulera last och se att `aws ecs describe-services` rapporterade hur DesiredCount höjdes över 2 när CPU-kravet triggades.
 - Lokal utveckling sker fortfarande med `npm run dev` och backendens `sam local start-api`, vilket gör att jag kan testa UI:t snabbt innan en containerbuild.
 - För att reglera regressioner planerar jag att använda samma Postman-collection som i serverless-projektet, men komplettera den med ett UI-smoketest mot ALB.
+
+## Jämförelse: Serverless vs Container
+
+| Egenskap | Serverless (S3 + CloudFront + Lambda) | Container (ECS Fargate + ALB) |
+| --- | --- | --- |
+| **Deploy-hastighet** | Snabb – `sam deploy` + S3-sync. | Något långsammare på grund av Docker build och image push. |
+| **Drift & skalning** | Autoskalning inbyggt i Lambda/API Gateway, ingen task-hantering. | Autoskalning via Target Tracking (1–4 tasks) kräver egen policy men ger full kontroll över min/max kapacitet. |
+| **Kostnadsmodell** | Pay-per-request och on-demand storage – billig vid låg last. | Fargate debiterar per timme och reserv kapacitet, dyrare på låg trafik men förutsägbar vid konstant last. |
+| **Flexibilitet** | Begränsad till runtime som Lambda stödjer, svårare med avancerade buildsteg. | Fullt containerstöd – valfritt språk/ramverk, eget OS-lager, lättare att porta annan frontend/backend. |
+| **Cachning/Performance** | CloudFront CDN out-of-the-box. | Kräver manuell CDN-lösning (t.ex. CloudFront framför ALB) om global cache önskas. |
+
+Generellt passar serverlessversionen bäst för minimal drift och låg trafik, medan containerlösningen ger mer kontroll över runtime och nätverk – på bekostnad av mer infrastruktur att hantera. Båda återanvänder samma backend-API och kan köras parallellt för test och A/B-jämförelser.
 
 ## Utmaningar
 
