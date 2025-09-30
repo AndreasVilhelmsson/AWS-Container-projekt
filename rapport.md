@@ -59,7 +59,7 @@ Jag aktiverade "Show connections" och drog trafikflödet `User → ALB → ECS S
 ```mermaid
 graph LR
     A[Besökare i webbläsare] -->|HTTP 80| B(ALB)
-    B --> C{{ECS Fargate Service\n(Target Tracking Autoscaling)}}
+    B --> C{{ECS Fargate Service<br/>Target Tracking Autoscaling}}
     C --> D[Nginx container]
     D -->|API-kall| E[API Gateway]
     E --> F[Lambda]
