@@ -59,7 +59,7 @@ Jag aktiverade "Show connections" och drog trafikflödet `User → ALB → ECS S
 ```mermaid
 graph LR
     A[Besökare i webbläsare] -->|HTTP 80| B(ALB)
-    B --> C{ECS Fargate Service}
+    B --> C{{ECS Fargate Service\n(Target Tracking Autoscaling)}}
     C --> D[Nginx container]
     D -->|API-kall| E[API Gateway]
     E --> F[Lambda]
@@ -67,9 +67,12 @@ graph LR
     F --> H[CloudWatch Logs]
     C --> I[ECR repository]
     I -.->|Pull image| C
+
+    classDef autoscale fill:#fde68a,stroke:#f97316,stroke-width:2px,color:#1f2937;
+    class C autoscale;
 ```
 
-Diagrammet illustrerar hur trafiken flyter och var autoskalningen sker (i nod `C`). Du kan även bädda in samma mermaid-kod i exempelvis Notion eller GitHub för att få ett renderat flödesschema.
+Autoskalningen sker i nod `C`, som är markerad med gul bakgrund i diagrammet. Du kan även bädda in samma mermaid-kod i exempelvis Notion eller GitHub för att få ett renderat flödesschema.
 
 ## Infrastruktur som kod
 
