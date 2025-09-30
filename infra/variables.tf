@@ -38,6 +38,24 @@ variable "desired_count" {
   type    = number
   default = 2
 }
+
+variable "min_capacity" {
+  description = "Minsta antal Fargate-tasks vid autoskalning"
+  type        = number
+  default     = 1
+}
+
+variable "max_capacity" {
+  description = "Högsta antal Fargate-tasks vid autoskalning"
+  type        = number
+  default     = 4
+}
+
+variable "cpu_target_value" {
+  description = "Mål-värde för genomsnittlig CPU-utilisation (%)"
+  type        = number
+  default     = 50
+}
 variable "health_check_path" {
   type    = string
   default = "/index.html"
