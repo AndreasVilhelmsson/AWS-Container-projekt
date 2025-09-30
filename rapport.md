@@ -35,9 +35,41 @@ Arkitekturen består av fyra huvuddelar:
 
 Resultatet är en klassisk container-setup i AWS där endast frontenden kör i ECS, men backend fortsatt lever i Lambda/API Gateway. Det ger en bra jämförelse i kostnad, svarstider och drift jämfört med S3 + CloudFront-lösningen.
 
+### Arkitekturskiss i Cloudcraft
+
+För att visualisera strukturen skapade jag en Cloudcraft-skiss med följande komponenter:
+
+- `Application Load Balancer` i publika subnät, kopplad till samma säkerhetsgrupp som i Terraform.
+- `ECS Fargate Service` med autoskalning (min/max 1–4 tasks) och health check via `/index.html`.
+- En "Serverless API"-nod som representerar API Gateway + Lambda-backendet.
+- DynamoDB-tabellen `ContactMessages` kopplad till Lambda.
+
+Jag aktiverade "Show connections" och drog trafikflödet `User → ALB → ECS Service → Serverless API → DynamoDB`. Lägg gärna till anteckningar om CPU-målvärdet (50 %) och exportera bilden i hög upplösning till `Images/cloudcraft.png` när skissen är klar.
+
 ![ALB i drift](Images/alb.jpg)
 
+![ALB Target groups](Images/targetgroups.jpg)
+
 ![ECS service och tasks](Images/ecs2.jpg)
+
+![ECR repositorium](Images/ecr2.jpg)
+
+## Flödesdiagram
+
+```mermaid
+graph LR
+    A[Besökare i webbläsare] -->|HTTP 80| B(ALB)
+    B --> C{ECS Fargate Service}
+    C --> D[Nginx container]
+    D -->|API-kall| E[API Gateway]
+    E --> F[Lambda]
+    F --> G[(DynamoDB)]
+    F --> H[CloudWatch Logs]
+    C --> I[ECR repository]
+    I -.->|Pull image| C
+```
+
+Diagrammet illustrerar hur trafiken flyter och var autoskalningen sker (i nod `C`). Du kan även bädda in samma mermaid-kod i exempelvis Notion eller GitHub för att få ett renderat flödesschema.
 
 ## Infrastruktur som kod
 
@@ -49,6 +81,13 @@ Terraform-koden är uppdelad efter resurstyp för tydlighet:
 - Autoskalningsmålet `aws_appautoscaling_target.ecs_service` (`infra/ecs.tf:123`) och CPU-policyn (`infra/ecs.tf:132`) justerar DesiredCount mellan `min_capacity` och `max_capacity`. Trösklarna går att styra via variabler i `infra/variables.tf:42`.
 - Variabler som `desired_count`, `health_check_path` och `container_port` är parametriserade (`infra/variables.tf:23`), vilket gjort det lätt att experimentera med fler instanser och andra portar.
 - Output-värdena (`infra/outputs.tf:1`) ger mig repository-url:en så att deployscriptet kan lösa fullständigt image-namn.
+
+### Konsolskärmdumpar
+
+- ECR-repositoriet med versionshistorik (`Images/ecr.jpg`, `Images/ecr2.jpg`, `Images/ecr3.jpg`).
+- ECS cluster- och servicevy med DesiredCount och autoskalningsgränser (`Images/ecs.jpg`, `Images/ecs2.jpg`).
+- ALB listener och target group-status (`Images/alb.jpg`, `Images/alb2.jpg`, `Images/targetgroups.jpg`).
+- Frontendgränssnittet efter deploy (`Images/frontendUI.jpg`).
 
 ## Applikation och container
 
