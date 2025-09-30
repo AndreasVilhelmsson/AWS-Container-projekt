@@ -3,7 +3,7 @@
 ## Introduktion
 
 Den här rapporten beskriver hur jag byggde **WebbAppContainer**, en containerbaserad variant av mitt kontaktformulär. Lösningen ersätter architecturen från serverless-projektet med en fullt containeriserad frontend som körs på AWS Fargate, men använder samma backend-API som jag byggde tidigare. Syftet var att lära mig hur man driver en modern React-applikation i ECS, hanterar hela kedjan från Docker build till lastbalanserad drift och jämföra kostnads- och operationsaspekter mot den serverlösa motsvarigheten. Jag
-har lärt mig mycket om olika lösningar i AWS och även de stora konsepten inom cloud architecture.
+har lärt mig mycket om olika lösningar i AWS och även de stora koncepten inom cloud architecture.
 
 ## Mål och omfattning
 
@@ -14,7 +14,7 @@ har lärt mig mycket om olika lösningar i AWS och även de stora konsepten inom
 
 ## Genomförande steg för steg
 
-1. **Förutsättningar för VPC.** Projektet lutar sig mot samma default-VPC som används av alla mina lösningar. Jag angav VPC och publika subnät i `infra/terraform.tfvars` så att både ALB och ECS kan få publik åtkomst via två AZ.
+1. **Förutsättningar för VPC.** Projektet startar med samma default-VPC som används i alla mina lösningar. Jag angav VPC och publika subnät i `infra/terraform.tfvars` så att både ALB och ECS kan få publik åtkomst via två AZ.
 2. **Terraform-initiering.** Med `terraform init`/`apply` skapades ECR-repositoriet och all nätverks- och säkerhetsinfrastruktur enligt filerna i `infra/`. Moduler ersattes inte – allt ligger i ett platt upplägg för att lätt följa resursdefinitionerna.
 3. **ECR och behörigheter.** Resursen `aws_ecr_repository.app` (`infra/main.tf:12`) aktiverar scanning on push och `force_delete` så att tidigare resurser rensas automatiskt. IAM-rollerna för ECS execution och task ligger i `infra/ecs.tf:12` respektive `infra/ecs.tf:32` och ger de behörigheter som behövs för att dra bilder från ECR och skriva loggar.
 4. **Ladda upp containern.** Jag skrev en tvåstegs Dockerfile (`app/Dockerfile:1`) som bygger React-appen i Node 22 och serverar den statiskt via `nginx:alpine`. `docker buildx build --platform linux/amd64` ser till att imagen kör på Fargates x86_64 runtime.
@@ -32,9 +32,10 @@ Arkitekturen består av fyra huvuddelar:
 - ALB routar trafiken till ECS Fargate-tasks i två publika subnät som ligger bakom en hårt limiterad säkerhetsgrupp (`infra/alb.tf:33`).
 - Containern kör Nginx och levererar den bundlade React-applikationen. Efter att sidan laddats gör JavaScript-anropen vidare till det befintliga serverless-API:t via HTTPS.
 - CloudWatch Logs grupperar containerloggar per tjänst (`infra/ecs.tf:6`), och ECR håller containerimagens versioner tillgängliga (`infra/main.tf:12`).
-- Autoskalningen håller DesiredCount inom spannet 1–4 tasks och balanserar CPU-last utan manuell inblandning (`infra/ecs.tf:123`).
+- Autoskalningen håller ett spann inom 1–4 tasks och balanserar CPU-last utan manuell inblandning (`infra/ecs.tf:123`).
 
-Resultatet är en klassisk container-setup i AWS där endast frontenden kör i ECS, men backend fortsatt lever i Lambda/API Gateway. Det ger en bra jämförelse i kostnad, svarstider och drift jämfört med S3 + CloudFront-lösningen.
+Resultatet är en container-setup i AWS där endast frontenden kör i ECS, men backend fortsatt lever i Lambda/API Gateway. Det ger en bra jämförelse i kostnad, svarstider och drift jämfört med S3 + CloudFront-lösningen. Det var kul att se att man kan köra
+samma backend i båda lösningarna
 
 ### Arkitekturskiss i Cloudcraft
 
@@ -106,9 +107,9 @@ Terraform-koden är uppdelad efter resurstyp för tydlighet:
 
 - Dockerfilen (`app/Dockerfile:1`) bygger alltid från en ren node-bild med `npm ci`,
   npm ci = clean install från package-lock.json.
-  • Installerar exakt samma beroenden varje gång.
-  • Ignorerar ev. ändringar i package.json som inte matchar package-lock.json.
-  • Snabbare och mer reproducerbart än npm install.
+  - Installerar exakt samma beroenden varje gång.
+  - Ignorerar ev. ändringar i package.json som inte matchar package-lock.json.
+  - Snabbare och mer reproducerbart än npm install.
 
 Resultat: samma dependencies i varje build = färre buggar.vilket garanterar reproducerbara builds. Static assets kopieras in i en minimal Nginx-miljö för bästa starttid.
 
@@ -117,14 +118,14 @@ Resultat: samma dependencies i varje build = färre buggar.vilket garanterar rep
 - API-klienten (`app/frontend/src/api/client.ts:12`) slår mot `/messages` och är kompatibel med den befintliga DynamoDB-modellen (`id`, `name`, `message`, `createdAt`).
 - SCSS-variablerna (`app/frontend/src/styles/_variables.scss:1`) används för att ge container-projektet ett eget tema.
 
-- När vi bygger frontendappen används alltid samma versioner av våra paket.  
-  Detta gör att appen fungerar likadant varje gång vi bygger den och vi slipper slumpmässiga buggar.
+- När man bygger frontendappen används alltid samma versioner av våra paket.  
+  Detta gör att appen fungerar likadant varje gång man bygger den och man slipper slumpmässiga buggar.
 
 - När appen är färdigbyggd blir den till vanliga **HTML-, CSS- och JS-filer** som läggs in i en lättviktsserver (**Nginx**).  
   Det gör att appen startar snabbt när den körs i molnet.
 
-- Byggkommandona för frontend ligger i `package.json` (rad 6) och körs automatiskt när vi bygger containern.  
-  Innan dess testkör vi lokalt med `npm run dev` för att se att allt fungerar.
+- Byggkommandona för frontend ligger i `package.json` (rad 6) och körs automatiskt när man bygger containern.  
+  Innan dess testkör man lokalt med `npm run dev` för att se att allt fungerar.
 
 - Huvudfilen `App.tsx` ansvarar för att hämta och skicka meddelanden.  
   Den visar också **laddnings- och felmeddelanden** och återanvänder komponenterna `MessageForm` och `MessageList`.
@@ -136,7 +137,7 @@ Resultat: samma dependencies i varje build = färre buggar.vilket garanterar rep
 
 ## Drift- och säkerhetsaspekter
 
-- Maliciös trafik stoppas på två nivåer: ALB-säkerhetsgruppen släpper bara in HTTP på port 80 och task-gruppen accepterar enbart trafik från ALB (`infra/alb.tf:33`).
+- skadlig trafik stoppas på två nivåer: ALB-säkerhetsgruppen släpper bara in HTTP på port 80 och task-gruppen accepterar enbart trafik från ALB (`infra/alb.tf:33`).
 - `assign_public_ip = true` i `infra/ecs.tf:107` säkerställer utgående internetåtkomst för Nginx (t.ex. för att hämta den serverless-API-destinationen), men jag kan senare växla till NAT + privata subnät.
 - Rolling updates styrs av `deployment_minimum_healthy_percent` och `deployment_maximum_percent` (`infra/ecs.tf:103`), vilket ger noll-downtime när en ny image rullas ut. Target Tracking-policyn kompletterar detta genom att automatiskt starta fler tasks när CPU:n blir för hög och minska kapaciteten vid låg last (`infra/ecs.tf:132`).
 - LoggRetentionen på 14 dagar (`infra/ecs.tf:6`) balanserar insyn och kostnad.
@@ -170,7 +171,6 @@ Scriptet fångar vanliga misstag (ingen Docker-daemon, avsaknad av Dockerfile) o
 - CloudWatch Logs verifierade att Nginx startade och returnerade 200-responser.
 - Autoskalningen verifierades genom att simulera last och se att `aws ecs describe-services` rapporterade hur DesiredCount höjdes över 2 när CPU-kravet triggades.
 - Lokal utveckling sker fortfarande med `npm run dev` och backendens `sam local start-api`, vilket gör att jag kan testa UI:t snabbt innan en containerbuild.
-- För att reglera regressioner planerar jag att använda samma Postman-collection som i serverless-projektet, men komplettera den med ett UI-smoketest mot ALB.
 
 ## Jämförelse: Serverless vs Container
 
@@ -209,4 +209,12 @@ Generellt passar serverlessversionen bäst för minimal drift och låg trafik, m
 
 ## Slutsats
 
-Projektet WebbAppContainer visade att vi kan köra samma frontend i en containerbaserad miljö, utan att behöva ändra något i backend. Med hjälp av Terraform, Docker och ett enkelt script kan vi snabbt bygga nya versioner av appen och rulla ut uppdateringar av användargränssnittet. Den här arkitekturen gör att vi får mer kontroll över nätverket och en flexibel grund för att i framtiden lägga till fler delar i containrar. Samtidigt återanvänds samma dataflöde och logik som i den tidigare serverless-lösningen, vilket gör att båda varianterna fungerar sömlöst tillsammans.
+Projektet WebbAppContainer visade att vi kan köra samma frontend i en containerbaserad miljö, utan att behöva ändra något i backend. Med hjälp av Terraform, Docker kan vi snabbt bygga nya versioner av appen och rulla ut uppdateringar av användargränssnittet. Den här arkitekturen gör att vi får mer kontroll över nätverket och en flexibel grund för att i framtiden lägga till fler delar i containrar. Samtidigt återanvänds samma dataflöde och logik som i den tidigare serverless-lösningen, vilket gör att båda varianterna fungerar perfekt tillsammans.
+
+## Länkar
+
+- https://d1xy7rp2ol1rs1.cloudfront.net/
+- http://react-web-alb-701996674.eu-west-1.elb.amazonaws.com/
+  https://github.com/AndreasVilhelmsson/AWS-Container-projekt/blob/main/rapport.md
+- https://github.com/AndreasVilhelmsson/AWS-Container-projekt
+- https://github.com/AndreasVilhelmsson/AWS-serverless-projekt
