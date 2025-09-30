@@ -44,7 +44,10 @@ För att visualisera strukturen skapade jag en Cloudcraft-skiss med följande ko
 - En "Serverless API"-nod som representerar API Gateway + Lambda-backendet.
 - DynamoDB-tabellen `ContactMessages` kopplad till Lambda.
 
-Jag aktiverade "Show connections" och drog trafikflödet `User → ALB → ECS Service → Serverless API → DynamoDB`. Lägg gärna till anteckningar om CPU-målvärdet (50 %) och exportera bilden i hög upplösning till `Images/cloudcraft.png` när skissen är klar.
+Jag aktiverade "Show connections" och drog trafikflödet `User → ALB → ECS Service → Serverless API → DynamoDB`. Lägg gärna till anteckningar om CPU-målvärdet (50 %) och exportera bilden i hög upplösning till `Images/Cloudcraft.jpg` när skissen är klar.
+
+![Cloudcraft arkitekturskiss](Images/Cloudcraft.jpg)
+<small>Cloudcraft-översikt som visar ALB, autoskalande ECS-tjänst samt kopplingen vidare till det återanvända serverless-API:t och DynamoDB.</small>
 
 ![ALB i drift](Images/alb.jpg)
 
