@@ -2,20 +2,21 @@
 
 ## Introduktion
 
-Den här rapporten beskriver hur jag byggde **WebbAppContainer**, en containerbaserad variant av mitt kontaktformulär. Lösningen ersätter den statiska S3-hostingen från serverless-projektet med en fullt containeriserad frontend som körs på AWS Fargate, men använder samma backend-API som jag byggde tidigare. Syftet var att lära mig hur man driver en modern React-applikation i ECS, hanterar hela kedjan från Docker build till lastbalanserad drift och jämföra kostnads- och operationsaspekter mot den serverlösa motsvarigheten.
+Den här rapporten beskriver hur jag byggde **WebbAppContainer**, en containerbaserad variant av mitt kontaktformulär. Lösningen ersätter architecturen från serverless-projektet med en fullt containeriserad frontend som körs på AWS Fargate, men använder samma backend-API som jag byggde tidigare. Syftet var att lära mig hur man driver en modern React-applikation i ECS, hanterar hela kedjan från Docker build till lastbalanserad drift och jämföra kostnads- och operationsaspekter mot den serverlösa motsvarigheten. Jag
+har lärt mig mycket om olika lösningar i AWS och även de stora konsepten inom cloud architecture.
 
 ## Mål och omfattning
 
 - Förpacka frontenden i en Docker-image och publicera den i ECR.
 - Köra containern på en skalbar Fargate-tjänst bakom ett Application Load Balancer.
 - Återanvända det befintliga serverless-API:t utan kodförändringar i backend.
-- Automatisera infrastrukturen med Terraform och skapa ett reproducerbart deployflöde.
+- Automatisera infrastrukturen med Terraform och skapa ett reproducerbart deployflöde. Jag har haft detta som mål och lyckats till 85%.
 
 ## Genomförande steg för steg
 
-1. **Förutsättningar för VPC.** Projektet lutar sig mot samma default-VPC som används av andra labbar. Jag angav VPC och publika subnät i `infra/terraform.tfvars` så att både ALB och ECS kan få publik åtkomst via två AZ.
+1. **Förutsättningar för VPC.** Projektet lutar sig mot samma default-VPC som används av alla mina lösningar. Jag angav VPC och publika subnät i `infra/terraform.tfvars` så att både ALB och ECS kan få publik åtkomst via två AZ.
 2. **Terraform-initiering.** Med `terraform init`/`apply` skapades ECR-repositoriet och all nätverks- och säkerhetsinfrastruktur enligt filerna i `infra/`. Moduler ersattes inte – allt ligger i ett platt upplägg för att lätt följa resursdefinitionerna.
-3. **ECR och behörigheter.** Resursen `aws_ecr_repository.app` (`infra/main.tf:12`) aktiverar scanning on push och `force_delete` så att labbresurser rensas automatiskt. IAM-rollerna för ECS execution och task ligger i `infra/ecs.tf:12` respektive `infra/ecs.tf:32` och ger de behörigheter som behövs för att dra bilder från ECR och skriva loggar.
+3. **ECR och behörigheter.** Resursen `aws_ecr_repository.app` (`infra/main.tf:12`) aktiverar scanning on push och `force_delete` så att tidigare resurser rensas automatiskt. IAM-rollerna för ECS execution och task ligger i `infra/ecs.tf:12` respektive `infra/ecs.tf:32` och ger de behörigheter som behövs för att dra bilder från ECR och skriva loggar.
 4. **Ladda upp containern.** Jag skrev en tvåstegs Dockerfile (`app/Dockerfile:1`) som bygger React-appen i Node 22 och serverar den statiskt via `nginx:alpine`. `docker buildx build --platform linux/amd64` ser till att imagen kör på Fargates x86_64 runtime.
 5. **ECS-kluster och service.** Terraform definierar klustret (`infra/ecs.tf:45`), task definitionen med loggkonfiguration (`infra/ecs.tf:50`) och servicen (`infra/ecs.tf:93`). Target groupens hälsokontroll pekar mot `/index.html` (`infra/alb.tf:66`), vilket var avgörande för att ALB skulle kunna markera containern som frisk.
 6. **Frontend-anslutningar.** React-appen hämtar samma API som serverless-versionen via `VITE_API_BASE` (`app/frontend/src/api/client.ts:10`). Formuläret och listan återvinner komponenterna från tidigare projekt (`app/frontend/src/App.tsx:1`), och det finns fortfarande en hook (`app/frontend/src/hooks/useMessages.ts:4`) om jag vill bryta ut logiken senare.
@@ -44,10 +45,10 @@ För att visualisera strukturen skapade jag en Cloudcraft-skiss med följande ko
 - En "Serverless API"-nod som representerar API Gateway + Lambda-backendet.
 - DynamoDB-tabellen `ContactMessages` kopplad till Lambda.
 
-Jag aktiverade "Show connections" och drog trafikflödet `User → ALB → ECS Service → Serverless API → DynamoDB`. Lägg gärna till anteckningar om CPU-målvärdet (50 %) och exportera bilden i hög upplösning till `Images/Cloudcraft.jpg` när skissen är klar.
+Bilden visar trafikflödet `User → ALB → ECS Service → Serverless API → DynamoDB`.
 
 ![Cloudcraft arkitekturskiss](Images/Cloudcraft.jpg)
-<small>Cloudcraft-översikt som visar ALB, autoskalande ECS-tjänst samt kopplingen vidare till det återanvända serverless-API:t och DynamoDB.</small>
+<small>Architecture bilden visar ALB, autoskalande ECS-tjänster samt kopplingen vidare till det återanvända serverless-API:t och DynamoDB.</small>
 
 ![ALB i drift](Images/alb.jpg)
 
@@ -81,7 +82,7 @@ graph LR
     class C autoscale;
 ```
 
-Autoskalningen sker i nod `C`, som är markerad med gul bakgrund i diagrammet. Du kan även bädda in samma mermaid-kod i exempelvis Notion eller GitHub för att få ett renderat flödesschema.
+Auto sker i nod `C`, som är markerad med gul bakgrund i diagrammet.
 
 ## Infrastruktur som kod
 
@@ -101,13 +102,37 @@ Terraform-koden är uppdelad efter resurstyp för tydlighet:
 - ALB listener och target group-status (`Images/alb.jpg`, `Images/alb2.jpg`, `Images/targetgroups.jpg`).
 - Frontendgränssnittet efter deploy (`Images/frontendUI.jpg`).
 
-## Applikation och container
+## Applikation och container som jag har lärt mig
 
-- Dockerfilen (`app/Dockerfile:1`) bygger alltid från en ren node-bild med `npm ci`, vilket garanterar reproducerbara builds. Static assets kopieras in i en minimal Nginx-miljö för bästa starttid.
+- Dockerfilen (`app/Dockerfile:1`) bygger alltid från en ren node-bild med `npm ci`,
+  npm ci = clean install från package-lock.json.
+  • Installerar exakt samma beroenden varje gång.
+  • Ignorerar ev. ändringar i package.json som inte matchar package-lock.json.
+  • Snabbare och mer reproducerbart än npm install.
+
+Resultat: samma dependencies i varje build = färre buggar.vilket garanterar reproducerbara builds. Static assets kopieras in i en minimal Nginx-miljö för bästa starttid.
+
 - Frontendens byggkommandon finns i `app/frontend/package.json:6` och körs automatiskt i Dockersteget. Loki testkörning sker lokalt med `npm run dev` innan bygg.
 - `App.tsx` (`app/frontend/src/App.tsx:7`) hämtar och skickar meddelanden, visar laddning/felstate och återanvänder komponenterna `MessageForm` och `MessageList`.
 - API-klienten (`app/frontend/src/api/client.ts:12`) slår mot `/messages` och är kompatibel med den befintliga DynamoDB-modellen (`id`, `name`, `message`, `createdAt`).
 - SCSS-variablerna (`app/frontend/src/styles/_variables.scss:1`) används för att ge container-projektet ett eget tema.
+
+- När vi bygger frontendappen används alltid samma versioner av våra paket.  
+  Detta gör att appen fungerar likadant varje gång vi bygger den och vi slipper slumpmässiga buggar.
+
+- När appen är färdigbyggd blir den till vanliga **HTML-, CSS- och JS-filer** som läggs in i en lättviktsserver (**Nginx**).  
+  Det gör att appen startar snabbt när den körs i molnet.
+
+- Byggkommandona för frontend ligger i `package.json` (rad 6) och körs automatiskt när vi bygger containern.  
+  Innan dess testkör vi lokalt med `npm run dev` för att se att allt fungerar.
+
+- Huvudfilen `App.tsx` ansvarar för att hämta och skicka meddelanden.  
+  Den visar också **laddnings- och felmeddelanden** och återanvänder komponenterna `MessageForm` och `MessageList`.
+
+- API-klienten (`client.ts`) pratar med vårt backend-API på `/messages` och använder samma datamodell som databasen:  
+  `id`, `name`, `message`, `createdAt`.
+
+- SCSS-variablerna (`_variables.scss`) används för att ge appen sitt tema, så att projektet har en egen **look & feel**.
 
 ## Drift- och säkerhetsaspekter
 
@@ -149,13 +174,13 @@ Scriptet fångar vanliga misstag (ingen Docker-daemon, avsaknad av Dockerfile) o
 
 ## Jämförelse: Serverless vs Container
 
-| Egenskap | Serverless (S3 + CloudFront + Lambda) | Container (ECS Fargate + ALB) |
-| --- | --- | --- |
-| **Deploy-hastighet** | Snabb – `sam deploy` + S3-sync. | Något långsammare på grund av Docker build och image push. |
-| **Drift & skalning** | Autoskalning inbyggt i Lambda/API Gateway, ingen task-hantering. | Autoskalning via Target Tracking (1–4 tasks) kräver egen policy men ger full kontroll över min/max kapacitet. |
-| **Kostnadsmodell** | Pay-per-request och on-demand storage – billig vid låg last. | Fargate debiterar per timme och reserv kapacitet, dyrare på låg trafik men förutsägbar vid konstant last. |
-| **Flexibilitet** | Begränsad till runtime som Lambda stödjer, svårare med avancerade buildsteg. | Fullt containerstöd – valfritt språk/ramverk, eget OS-lager, lättare att porta annan frontend/backend. |
-| **Cachning/Performance** | CloudFront CDN out-of-the-box. | Kräver manuell CDN-lösning (t.ex. CloudFront framför ALB) om global cache önskas. |
+| Egenskap                 | Serverless (S3 + CloudFront + Lambda)                                        | Container (ECS Fargate + ALB)                                                                                 |
+| ------------------------ | ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| **Deploy-hastighet**     | Snabb – `sam deploy` + S3-sync.                                              | Något långsammare på grund av Docker build och image push.                                                    |
+| **Drift & skalning**     | Autoskalning inbyggt i Lambda/API Gateway, ingen task-hantering.             | Autoskalning via Target Tracking (1–4 tasks) kräver egen policy men ger full kontroll över min/max kapacitet. |
+| **Kostnadsmodell**       | Pay-per-request och on-demand storage – billig vid låg last.                 | Fargate debiterar per timme och reserv kapacitet, dyrare på låg trafik men förutsägbar vid konstant last.     |
+| **Flexibilitet**         | Begränsad till runtime som Lambda stödjer, svårare med avancerade buildsteg. | Fullt containerstöd – valfritt språk/ramverk, eget OS-lager, lättare att porta annan frontend/backend.        |
+| **Cachning/Performance** | CloudFront CDN out-of-the-box.                                               | Kräver manuell CDN-lösning (t.ex. CloudFront framför ALB) om global cache önskas.                             |
 
 Generellt passar serverlessversionen bäst för minimal drift och låg trafik, medan containerlösningen ger mer kontroll över runtime och nätverk – på bekostnad av mer infrastruktur att hantera. Båda återanvänder samma backend-API och kan köras parallellt för test och A/B-jämförelser.
 
@@ -167,12 +192,21 @@ Generellt passar serverlessversionen bäst för minimal drift och låg trafik, m
 
 ## Fortsatt arbete
 
-1. Sätt upp HTTPS via ACM-certifikat och en `aws_lb_listener` på port 443.
-2. Flytta ECS-tasks till privata subnät och använd NAT Gateway för utgående trafik.
-3. Automatisera deployflödet i GitHub Actions med `terraform plan` + `docker build` + `aws ecs deploy`.
-4. Implementera syntetiska tester (Pingdom/Route53 health checks) mot ALB för tidig larmning.
-5. Lägga till en RequestCount-baserad skalningspolicy och/eller min/max justeringar för nattdrift.
+1. **Aktivera HTTPS**  
+   Konfigurera ett ACM-certifikat och sätt upp en `aws_lb_listener` på port **443** så att all trafik går krypterat via HTTPS.
+
+2. **Öka nätverkssäkerheten**  
+   Flytta ECS-tasks till **privata subnät** (utan publik IP) och ge dem utgående internetåtkomst via en **NAT Gateway**. Detta minskar exponeringen mot omvärlden.
+
+3. **Automatisera deployment**  
+   Bygg ett **GitHub Actions-flöde** som automatiskt kör `terraform plan`, bygger Dockerimagen och rullar ut den till ECS. På så sätt blir releaseprocessen snabbare och mer tillförlitlig.
+
+4. **Införa övervakningstester**  
+   Lägg till syntetiska tester (t.ex. **Pingdom** eller **Route53 health checks**) mot lastbalanseraren (ALB) för att tidigt upptäcka om något inte fungerar.
+
+5. **Förbättra autoskalning**  
+   Utöka skalningspolicyn med mätvärdet **RequestCount** och/eller införa särskilda **min/max-regler** för lågtrafik på natten, för att optimera kostnad och prestanda.
 
 ## Slutsats
 
-WebbAppContainer-projektet uppfyllde målet att köra samma frontend i en containerdriven miljö utan att röra backendkoden. Med Terraform, Docker och ett enkelt deployscript går det snabbt att bygga om imagen och rulla ut nya UI-versioner. Arkitekturen ger mig bättre kontroll över nätverkslagret och gör det lätt att koppla på fler containeriserade komponenter i framtiden, samtidigt som den delar dataflöde och logik med den tidigare serverless-lösningen.
+Projektet WebbAppContainer visade att vi kan köra samma frontend i en containerbaserad miljö, utan att behöva ändra något i backend. Med hjälp av Terraform, Docker och ett enkelt script kan vi snabbt bygga nya versioner av appen och rulla ut uppdateringar av användargränssnittet. Den här arkitekturen gör att vi får mer kontroll över nätverket och en flexibel grund för att i framtiden lägga till fler delar i containrar. Samtidigt återanvänds samma dataflöde och logik som i den tidigare serverless-lösningen, vilket gör att båda varianterna fungerar sömlöst tillsammans.
